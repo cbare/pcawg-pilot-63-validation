@@ -52,6 +52,8 @@ class Source(object):
         self.name = name
         self.folder_id = folder_id
         self.prefix = prefix
+    def __repr__(self):
+        return "Source(name=\"{name}\", folder_id=\"{folder_id}\", prefix=\"{prefix}\")".format(**self.__dict__)
 
 sources = [
     Source("DKFZ", "syn3104289", ".somatic"),
@@ -60,28 +62,6 @@ sources = [
     Source("UCSC-gatk_muse", "syn3107237", ".gatk_muse_0.9.9.5"),
     Source("UCSC-gatk_mutect", "syn3107237", ".gatk_mutect"),
     Source("UCSC-muse", "syn3107237", ".muse_0.9.9.5")]
-
-def print_meta_data():
-    for key,value in folders.iteritems():
-        print "\nprocessing", key
-        results = syn.chunkedQuery('select * from entity where parentId=="%s" order by name' % value)
-        keys = {}
-        has_provenance = {}
-        for result in clean_query_results(results):
-            for key,value in remove_properties(result).iteritems():
-                keys[key] = keys.setdefault(key,0) + 1
-
-            try:
-                activity = syn.getProvenance(result['id'])
-            except Exception:
-                activity = None
-            has_provenance[result['id']] = activity is not None
-
-        key_list = keys.keys()
-        key_list.sort()
-        for key in key_list:
-            print key, ":", keys[key]
-        print "Provenance:", sum(has_provenance.values()), "of", len(has_provenance)
 
 def get_annotations(folder_id, prefix=".somatic"):
     synapse_ids   = []
@@ -126,6 +106,9 @@ def create_metadata_df(sources):
     return pd.concat(dfs)
 
 
+df = create_metadata_df(sources)
+print df.groupby(["source", "variant_type"])["synapse_id"].count()
+
 
 import numpy as np
 import matplotlib
@@ -134,7 +117,30 @@ from matplotlib.collections import PatchCollection
 import matplotlib.pyplot as plt
 
 
-def plot_progress(data):
+def plot_progress(df):
+    ind = np.arange(len(sources)) + 0.1    # the x locations for the groups
+    width = 0.80
+    variant_types = ['snv', 'sv', 'indel']
+
+    colors = {'snv':'#336699', 'sv':'#0000AA', 'indel':'#6633AA'}
+    bars = {}
+    bottoms = np.zeros(len(sources))
+    for i, variant_type in enumerate(variant_types):
+        counts = np.array(
+            [len(df[ (df['source']==source.name) & (df['variant_type']==variant_type) ]) for source in sources])
+        print i, variant_type, counts
+        bars[variant_type] = plt.bar(ind, counts, width=width, bottom=bottoms, color=colors[variant_type])
+        bottoms += counts
+
+    plt.title('Count of VCF files by source and variant type')
+    plt.xticks(ind+width/2., [source.name for source in sources] )
+    #plt.yticks(np.arange(0,81,10))
+    plt.legend([bars[variant_type] for variant_type in variant_types], variant_types)
+
+    plt.show()
+
+
+def plot_progress_old(data):
 
     sample_ids = list(set(data['sample_ids']))
     sample_ids.sort()

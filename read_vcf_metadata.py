@@ -48,20 +48,22 @@ def extract_uuid(name):
 ## Project: ICGC-TCGA Whole Genome Pan-Cancer Analysis 
 ## /Files/VCF files/  syn2351328/syn2882202
 class Source(object):
-    def __init__(self, name, folder_id, prefix):
+    def __init__(self, name, workflow, folder_id, prefix):
         self.name = name
+        self.workflow = workflow
         self.folder_id = folder_id
         self.prefix = prefix
     def __repr__(self):
-        return "Source(name=\"{name}\", folder_id=\"{folder_id}\", prefix=\"{prefix}\")".format(**self.__dict__)
+        return "Source(name=\"{name}\", workflow=\"{workflow}\", folder_id=\"{folder_id}\", prefix=\"{prefix}\")".format(**self.__dict__)
 
 sources = [
-    Source("DKFZ", "syn3104289", ".somatic"),
-    Source("EMBL", "syn3153529", ".somatic"),
-    Source("SANGER", "syn3155834", ".somatic"),
-    Source("UCSC-gatk_muse", "syn3107237", ".gatk_muse_0.9.9.5"),
-    Source("UCSC-gatk_mutect", "syn3107237", ".gatk_mutect"),
-    Source("UCSC-muse", "syn3107237", ".muse_0.9.9.5")]
+    Source("DKFZ", "dkfz_1-0-107", "syn3104289", ".somatic"),
+    Source("EMBL", "delly", "syn3153529", ".somatic"),
+    Source("SANGER", "svcp_1-0-2", "syn3155834", ".somatic"),
+    Source("UCSC-gatk_muse", "gatk_muse_0.9.9.5", "syn3107237", ".gatk_muse_0.9.9.5"),
+    Source("UCSC-gatk_mutect", "gatk_mutect", "syn3107237", ".gatk_mutect"),
+    Source("UCSC-muse", "muse_0.9.9.5", "syn3107237", ".muse_0.9.9.5")]
+
 
 def get_annotations(folder_id, prefix=".somatic"):
     synapse_ids   = []
@@ -118,24 +120,36 @@ import matplotlib.pyplot as plt
 
 
 def plot_progress(df):
-    ind = np.arange(len(sources)) + 0.1    # the x locations for the groups
-    width = 0.80
+    width = 0.8
     variant_types = ['snv', 'sv', 'indel']
 
-    colors = {'snv':'#336699', 'sv':'#0000AA', 'indel':'#6633AA'}
-    bars = {}
-    bottoms = np.zeros(len(sources))
-    for i, variant_type in enumerate(variant_types):
-        counts = np.array(
-            [len(df[ (df['source']==source.name) & (df['variant_type']==variant_type) ]) for source in sources])
-        print i, variant_type, counts
-        bars[variant_type] = plt.bar(ind, counts, width=width, bottom=bottoms, color=colors[variant_type])
-        bottoms += counts
+    palette = {'snv':'#336699', 'sv':'#0000AA', 'indel':'#6633AA'}
+    counts = []
+    colors = []
+    source_counts = {}
+    labels = []
+    for source in sources:
+        for i, variant_type in enumerate(variant_types):
+            count = len(df[ (df['source']==source.name) & (df['variant_type']==variant_type) ])
+            if count > 0:
+                counts.append(count)
+                colors.append(palette[variant_type])
+                source_counts.setdefault(source.name, 0)
+                source_counts[source.name] += 1
+                labels.append(source.name)
+
+    print counts
+    ind = np.arange(len(counts)) + 0.1    # the x locations for the bars
+    plt.bar(ind, counts, width=width, color=colors, alpha=0.4)
 
     plt.title('Count of VCF files by source and variant type')
-    plt.xticks(ind+width/2., [source.name for source in sources] )
+    plt.xticks(ind+width/2., labels )
     #plt.yticks(np.arange(0,81,10))
     plt.legend([bars[variant_type] for variant_type in variant_types], variant_types)
+
+    plt.text(1,  -4,"DKFZ", horizontalalignment="center")
+    plt.text(2.5,-4,"EMBL", horizontalalignment="center")
+    plt.text(4.5,-4,"SANGER", horizontalalignment="center")
 
     plt.show()
 

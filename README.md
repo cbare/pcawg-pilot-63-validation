@@ -22,3 +22,17 @@ Need:
 
 
 
+Plan:
+* write script to create table of:
+  - synapse id
+  - tumor sample id
+  - normal sample id
+  - variant type
+  - source (DKFZ/EMBL/SANGER/UCSC)
+  - alorithm / workflow
+
+
+Questions:
+* Looks like all VCFs under Annai are germline?
+* Any more info needed?
+

@@ -5,7 +5,7 @@ import re
 import sys
 import synapseclient
 import synapseclient.utils as utils
-from synapseclient import Project, File, Folder
+from synapseclient import Project, File, Folder, Activity
 from synapseclient import Schema, Column, Table, Row, RowSet, as_table_columns
 import pandas as pd
 import numpy as np
@@ -195,7 +195,10 @@ def add_new_rows_to_table(schema, df):
     results = syn.tableQuery('select synapse_id from %s' % utils.id_of(schema), includeRowIdAndRowVersion=False)
     synapse_ids = [row[0] for row in results]
     df_new_rows = df[ [synapse_id not in synapse_ids for synapse_id in df['synapse_id']] ]
-    return syn.store(Table(schema, df_new_rows))
+    if df_new_rows.shape[0] > 0:
+        return syn.store(Table(schema, df_new_rows))
+    else:
+        return None
 
 def store_this_script():
     return syn.store(
@@ -212,26 +215,27 @@ def update_figure_and_table(sources, script_commit_url=None):
     schema = syn.get(TABLE_SYNAPSE_ID)
     table = add_new_rows_to_table(schema, df)
 
-    script_entity = syn.get(THIS_SCRIPT_SYNAPSE_ID, downloadFile=False)
-    if script_commit_url:
-        script_entity.externalURL = script_commit_url
-        script_entity = syn.store(script_entity)
+    if table:
+        script_entity = syn.get(THIS_SCRIPT_SYNAPSE_ID, downloadFile=False)
+        if script_commit_url:
+            script_entity.externalURL = script_commit_url
+            script_entity = syn.store(script_entity)
 
-    activity = Activity(
-        name='Pilot-63-progress',
-        description='Track VCF files uploaded for the PCAWG Pilot-63 project',
-        used=list(set(source.folder_id for source in sources)),
-        executed=[script_entity])
+        activity = Activity(
+            name='Pilot-63-progress',
+            description='Track VCF files uploaded for the PCAWG Pilot-63 project',
+            used=list(set(source.folder_id for source in sources)),
+            executed=[script_entity])
 
-    activity = syn.setProvenance(schema, activity)
+        activity = syn.setProvenance(schema, activity)
 
-    image_filename="pilot-63-progress.png"
-    plot_progress(df, image_filename)
+        image_filename="pilot-63-progress.png"
+        plot_progress(df, image_filename)
 
-    bar_chart = syn.get(BAR_CHART_SYNAPSE_ID, downloadFile=False)
-    bar_chart.path = "pilot-63-progress.png"
-    bar_chart.synapseStore=True
-    bar_chart = syn.store(bar_chart, activity=activity)
+        bar_chart = syn.get(BAR_CHART_SYNAPSE_ID, downloadFile=False)
+        bar_chart.path = "pilot-63-progress.png"
+        bar_chart.synapseStore=True
+        bar_chart = syn.store(bar_chart, activity=activity)
 
     return bar_chart
 
@@ -244,7 +248,7 @@ def main():
     parser.add_argument("-u", "--user", help="UserName", default=None)
     parser.add_argument("-p", "--password", help="Password", default=None)
     parser.add_argument("--debug", help="Show verbose error output from Synapse API calls", action="store_true", default=False)
-    parser.add_argument("script-commit-url", metavar="SCRIPT_COMMIT_URL", help="Github URL of this script")
+    parser.add_argument("script_commit_url", metavar="SCRIPT_COMMIT_URL", help="Github URL of this script")
 
     args = parser.parse_args()
 

@@ -148,12 +148,14 @@ def add_new_rows_to_table(df, replace_table=False):
         df = df[ [synapse_id not in synapse_ids for synapse_id in df['synapse_id']] ]
 
     if df.shape[0] > 0:
+        print "Adding %d rows to pilot-63-progress table" % df.shape[0]
         return syn.store(Table(schema, df))
     else:
+        print "No new rows for pilot-63-progress table"
         return None
 
 
-def plot_progress(df, image_filename):
+def plot_progress(df, sources, image_filename):
     #plt.close()
 
     width = 0.8
@@ -166,7 +168,7 @@ def plot_progress(df, image_filename):
     labels = []
     variant_type_indexes = {}
     for source in sources:
-        workflows = df_progress.workflow[df_progress.source==source.name].unique()
+        workflows = df.workflow[df.source==source.name].unique()
         for i, variant_type in enumerate(variant_types):
             for workflow in workflows:
                 count = len(df[ (df['source']==source.name) &
@@ -208,17 +210,17 @@ def plot_progress(df, image_filename):
 
 
 
-def update_figure_and_table(sources, script_commit_url=None, replace_table=False):
+def update_figure_and_table(sources, script_commit_url=None, replace_table=False, force_update=False):
     df_all, df, df_progress = create_metadata_df(sources)
     print df_progress.groupby(["source", "variant_type"])["synapse_id"].count()
 
     table = add_new_rows_to_table(df_progress, replace_table)
 
-    if table:
+    if table or force_update:
         script_entity = syn.get(THIS_SCRIPT_SYNAPSE_ID, downloadFile=False)
         if script_commit_url:
             script_entity.externalURL = script_commit_url
-            #script_entity = syn.store(script_entity)
+            script_entity = syn.store(script_entity)
 
         activity = Activity(
             name='Pilot-63-progress',
@@ -226,15 +228,15 @@ def update_figure_and_table(sources, script_commit_url=None, replace_table=False
             used=list(set(source.folder_id for source in sources)),
             executed=[script_entity])
 
-        activity = syn.setProvenance(table.schema, activity)
+        activity = syn.setProvenance(TABLE_SYNAPSE_ID, activity)
 
         image_filename="pilot-63-progress.png"
-        plot_progress(df, image_filename)
+        plot_progress(df_progress, sources, image_filename)
 
         bar_chart = syn.get(BAR_CHART_SYNAPSE_ID, downloadFile=False)
         bar_chart.path = "pilot-63-progress.png"
         bar_chart.synapseStore=True
-        #bar_chart = syn.store(bar_chart, activity=activity)
+        bar_chart = syn.store(bar_chart, activity=activity)
 
 
 
@@ -246,7 +248,8 @@ def main():
     parser.add_argument("-u", "--user", help="UserName", default=None)
     parser.add_argument("-p", "--password", help="Password", default=None)
     parser.add_argument("--debug", help="Show verbose error output from Synapse API calls", action="store_true", default=False)
-    parser.add_argument("--replace-table", help="Replace whole pilot-63-progress table", action="store_true", default=False)    
+    parser.add_argument("--replace-table", help="Replace whole pilot-63-progress table", action="store_true", default=False)
+    parser.add_argument("--force-update", help="Update graph even if there are no new table entries", action="store_true", default=False)
     parser.add_argument("script_commit_url", metavar="SCRIPT_COMMIT_URL", help="Github URL of this script")
 
     args = parser.parse_args()
@@ -258,7 +261,8 @@ def main():
         args.password = os.environ.get('SYNAPSE_PASSWORD', None)
     syn.login(email=args.user, password=args.password)
 
-    update_figure_and_table(sources, args.script_commit_url, args.replace_table)
+    update_figure_and_table(sources, args.script_commit_url, 
+        replace_table=args.replace_table, force_update=args.force_update)
 
 
 

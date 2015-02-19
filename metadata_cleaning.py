@@ -78,6 +78,32 @@ for result in results:
     print syn.setAnnotations(e, a)
 
 
+# source = Source("UCSC", "syn3107237")
+# results = syn.chunkedQuery('select * from file where parentId=="%s"' % source.folder_id)
+# df = query2df(results)
+
+results = clean_query_results(syn.chunkedQuery('select id, name from file where parentId=="syn3107237"'))
+for result in results:
+    m = re.match(r"([a-zA-Z0-9_\-]*)\.(gatk_muse_0.9.9.5|gatk_mutect|muse_0.9.9.5)\.(snv_mnv)\.(vcf.gz)", result['name'])
+    if m:
+        e = syn.get(result['id'], downloadFile=False)
+        a = e.annotations
+
+        a['donor_id'] = m.group(1)
+        a['workflow_name'] = m.group(2)
+        a['call_type'] = 'somatic'
+        a['analysis_id_tumor'] = sample_df['Tumour Analysis ID'][ sample_df['Donor ID']==a['donor_id'] ][0]
+        a['dataSubType'] = m.group(3)
+        a['dataType'] = 'DNA'
+        a['disease']  = 'Cancer'
+        a['fileType'] = 'vcf'
+        a['center'] = 'ucsc'
+
+        print syn.setAnnotations(e, a)
+    else:
+        raise Exception("Couldn't parse filename: "+result['name'])
+
+
 ## fix sample_id -> analysis_id_tumor and Donor ID -> donor_id
 for source in sources:
     if source.name in ["BSC", "Broad", "DKFZ", "EMBL", "MDA_HGSC", "MDA_KChen", "McGill", "OICR", "SFU", "WUSTL"]:

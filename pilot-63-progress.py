@@ -81,7 +81,7 @@ sources = [
     Source("Broad",      "syn3165121"),
     Source("BSC",        "syn3165143"),
     Source("DKFZ",       "syn3104289"),
-    Source("EMBL",       "syn3153529"),
+    Source("EMBL",       "syn3153526"),
     Source("McGill",     "syn3165151"),
     Source("MDA_HGSC",   "syn3167886"),
     Source("MDA_KChen",  "syn3165149"),
@@ -113,6 +113,8 @@ def create_metadata_df(sources):
     def is_dup(name):
         return name.endswith('.vcf') and (name+".gz" in df_all.name.values)
     dups = df_all.name.apply(is_dup)
+
+    print "%d duplicate .vcf and .vcf.gz files found" % sum(dups)
 
     ## assume wustle VCFs are somatic variants only ??
     df_all.call_type[ df_all.center=='wustl' ] = 'somatic'
@@ -220,6 +222,8 @@ def update_figure_and_table(sources, script_commit_url=None, replace_table=False
         script_entity = syn.get(THIS_SCRIPT_SYNAPSE_ID, downloadFile=False)
         if script_commit_url:
             script_entity.externalURL = script_commit_url
+            fileHandle = syn._addURLtoFileHandleService(script_commit_url, mimetype="text/x-python")
+            script_entity.dataFileHandleId = fileHandle['id']
             script_entity = syn.store(script_entity)
 
         activity = Activity(

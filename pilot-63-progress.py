@@ -120,9 +120,6 @@ def create_metadata_df(sources):
     df_all.call_type[ df_all.center=='wustl' ] = 'somatic'
     df_all.workflow_name[ df_all.center=='wustl' ] = 'wustl'
 
-    ## fix DKFZ dataSubType
-    df_all.dataSubType[ df_all.center=='DKFZ' ] = df_all.dataType[ df_all.center=='DKFZ' ]
-
     ## fix EMBL dataSubType and workflow
     df_all.dataSubType[ df_all.center=='EMBL' ] = 'sv'
     df_all.workflow_name[ df_all.center=='EMBL' ] = 'pcawg-delly'
@@ -137,21 +134,26 @@ def create_metadata_df(sources):
     return df_all, df, df_progress
 
 
-def add_new_rows_to_table(df, replace_table=False):
+def add_new_rows_to_table(df, replace_table=False, dry_run=False):
     """Add rows for synapse IDs not already represented in the table or replace the whole table"""
     schema = syn.get(TABLE_SYNAPSE_ID)
     if replace_table:
         ## delete previous entries in pilot-63-progress table
         results = syn.tableQuery('select * from %s' % utils.id_of(schema), resultsAs='rowset')
-        syn.delete(results)
+        if not dry_run:
+            syn.delete(results)
     else:
         results = syn.tableQuery('select synapse_id from %s' % utils.id_of(schema), includeRowIdAndRowVersion=False)
         synapse_ids = [row[0] for row in results]
         df = df[ [synapse_id not in synapse_ids for synapse_id in df['synapse_id']] ]
 
     if df.shape[0] > 0:
-        print "Adding %d rows to pilot-63-progress table" % df.shape[0]
-        return syn.store(Table(schema, df))
+        if dry_run:
+            print "Dry run: would have added %d rows to pilot-63-progress table" % df.shape[0]
+        else:
+            print "Adding %d rows to pilot-63-progress table" % df.shape[0]
+            syn.store(Table(schema, df))
+        return df.shape[0]
     else:
         print "No new rows for pilot-63-progress table"
         return None
@@ -212,15 +214,15 @@ def plot_progress(df, sources, image_filename):
 
 
 
-def update_figure_and_table(sources, script_commit_url=None, replace_table=False, force_update=False):
+def update_figure_and_table(sources, script_commit_url=None, replace_table=False, force_update=False, dry_run=False):
     df_all, df, df_progress = create_metadata_df(sources)
     print df_progress.groupby(["source", "variant_type"])["synapse_id"].count()
 
-    table = add_new_rows_to_table(df_progress, replace_table)
+    table = add_new_rows_to_table(df_progress, replace_table, dry_run=dry_run)
 
     if table or force_update:
         script_entity = syn.get(THIS_SCRIPT_SYNAPSE_ID, downloadFile=False)
-        if script_commit_url:
+        if script_commit_url and not dry_run:
             script_entity.externalURL = script_commit_url
             fileHandle = syn._addURLtoFileHandleService(script_commit_url, mimetype="text/x-python")
             script_entity.dataFileHandleId = fileHandle['id']
@@ -232,7 +234,8 @@ def update_figure_and_table(sources, script_commit_url=None, replace_table=False
             used=list(set(source.folder_id for source in sources)),
             executed=[script_entity])
 
-        activity = syn.setProvenance(TABLE_SYNAPSE_ID, activity)
+        if not dry_run:
+            activity = syn.setProvenance(TABLE_SYNAPSE_ID, activity)
 
         image_filename="pilot-63-progress.png"
         plot_progress(df_progress, sources, image_filename)
@@ -240,7 +243,8 @@ def update_figure_and_table(sources, script_commit_url=None, replace_table=False
         bar_chart = syn.get(BAR_CHART_SYNAPSE_ID, downloadFile=False)
         bar_chart.path = "pilot-63-progress.png"
         bar_chart.synapseStore=True
-        bar_chart = syn.store(bar_chart, activity=activity)
+        if not dry_run:
+            bar_chart = syn.store(bar_chart, activity=activity)
 
 
 
@@ -253,6 +257,7 @@ def main():
     parser.add_argument("-p", "--password", help="Password", default=None)
     parser.add_argument("--debug", help="Show verbose error output from Synapse API calls", action="store_true", default=False)
     parser.add_argument("--replace-table", help="Replace whole pilot-63-progress table", action="store_true", default=False)
+    parser.add_argument("--dry-run", help="Don't write anything to Synapse", action="store_true", default=False)
     parser.add_argument("--force-update", help="Update graph even if there are no new table entries", action="store_true", default=False)
     parser.add_argument("script_commit_url", metavar="SCRIPT_COMMIT_URL", help="Github URL of this script")
 
@@ -266,7 +271,7 @@ def main():
     syn.login(email=args.user, password=args.password)
 
     update_figure_and_table(sources, args.script_commit_url, 
-        replace_table=args.replace_table, force_update=args.force_update)
+        replace_table=args.replace_table, force_update=args.force_update, dry_run=args.dry_run)
 
 
 
